@@ -12,11 +12,14 @@ import sys
 
 ###############################################################################
 
-### Load STO radar data ###
 
 def loadStoMigData(fname,uice=168.,CReSIS=False):
+    """
+    ### Load STO radar data ###
+    """
+
     mfile = loadmat(fname)
-    
+
     # data file variables
     migdata = mfile['migdata']              # the actual radar data
     surface = mfile['elev'][:,0]               # elevation of the surface
@@ -38,15 +41,17 @@ def loadStoMigData(fname,uice=168.,CReSIS=False):
     R = 6371000.                            # Radius of the earth (m)
     a = np.sin((dlat-dlat[0])/2.)**2.+np.cos(dlat[0])*np.cos(dlat)*np.sin((dlon-dlon[0])/2.)**2.
     dist = 2.*R*np.arcsin(np.sqrt(a))
-    
+
     return migdata,surface,time,dist,vdist
 
 
-### Load STO pick data ###
 
 def loadStoPickData(fname,uice=168.,CReSIS=False):
+    """
+    ### Load STO pick data ###
+    """
     pfile = loadmat(fname)
-    
+
     # Pickfile data
     pnum = pfile['picks'][0][0][5]          # pick id
     ppower = pfile['picks'][0][0][4]        # power of picked layer
@@ -54,37 +59,39 @@ def loadStoPickData(fname,uice=168.,CReSIS=False):
     psamp1 = pfile['picks'][0][0][1]-1      # sample number for center of Ricker Wavelet, subtract 1 for python indexing
     psamp2 = pfile['picks'][0][0][2]-1      # sample number for bottom of Ricker Wavelet, subtract 1 for python indexing
     ptimes = pfile['picks'][0][0][3]        # pick time is to the top of the Ricker Wavelet
-    
+
     # Coordinates
     lat = pfile['geocoords'][0][0][0].flatten()
     lon = pfile['geocoords'][0][0][1].flatten()
     x_coord = pfile['geocoords'][0][0][3].flatten()
     y_coord = pfile['geocoords'][0][0][4].flatten()
-    
+
     ### Calculations ###
     # Conversions
     pdist = ptimes*uice/2.                  # distance to the top of the picked wavelet (m)
-    ppower = 10.*np.log10(ppower)           # dB scale  
+    ppower = 10.*np.log10(ppower)           # dB scale
     # the cresis data was already power, then the picker squared it again
     if CReSIS == True:
         ppower = ppower/2.
-        
+
     # calculate distance using haversine formula
     dlat=lat*np.pi/180.
     dlon=lon*np.pi/180.
     R = 6371000.                            # Radius of the earth (m)
     a = np.sin((dlat-dlat[0])/2.)**2.+np.cos(dlat[0])*np.cos(dlat)*np.sin((dlon-dlon[0])/2.)**2.
     dist = 2.*R*np.arcsin(np.sqrt(a))
-    
+
     return ppower,psamp1,pdist,lat,lon,x_coord,y_coord,dist,pnum
 
-###############################################################################    
+###############################################################################
 
-### Fresnel's Equations ###
-    
-# Assuming that the materials are not magnetic
-    
 def Fresnel(n1,n2,theta_i):
+    """
+    ### Fresnel's Equations ###
+
+    # Assuming that the materials are not magnetic
+    """
+
     if np.all(theta_i > 2*np.pi) or isinstance(n1,int) or isinstance(n2,int):
         sys.exit("Input the incident angle in radians and the refractive indices as floating points.")
     # reflection angle is equal to incident angle
@@ -99,19 +106,21 @@ def Fresnel(n1,n2,theta_i):
     Tp = (2*n1*np.cos(theta_i))/(n2*np.cos(theta_i)+n1*np.cos(theta_t))
     # Brewster's Angle
     theta_b = np.arctan(n2/n1)
-    # Total Internal Reflection 
+    # Total Internal Reflection
     theta_tir = np.arcsin(n2/n1)
     return theta_r,theta_t,theta_b,theta_tir,Rp,Tp,Rs,Ts
 
 ###############################################################################
 
-### Attenuation rate to temperature ###
+def attTemp(T,Hplus=1.3,Clminus=4.2):
+    """
+    ### Attenuation rate to temperature ###
 
-# See MacGregor et al. 2007
-# TODO: move the constants to another script so that they are standardized
-# TODO: This is for pure ice. I need to rethink for different ion concentrations
+    # See MacGregor et al. 2007
+    # TODO: move the constants to another script so that they are standardized
+    # TODO: This is for pure ice. I need to rethink for different ion concentrations
+    """
 
-def attTemp(T,Hplus=1.3,Clminus=4.2):    
     eps0 = 8.85e-12     # permittivity of free space
     eps = 3.2           # relative permittivity of ice
     c = 3e8             # speed of light (m/s)
@@ -158,19 +167,31 @@ def pureTempAtt(att):
     T -= 273.15
     return T
 
-###############################################################################    
-
-### Karlsson Continuity Method ###
-    
-# Based on Karlsson et al. (2012)
-# This method gives a value for the continuity of radar layers
-# P -- uncorrected power
-# s_ind -- surface pick index
-# b_ind -- bed pick index
-# cutoff_ratio -- assigns the number of samples that are removed from top and bottom of the trace
+###############################################################################
 
 def continuityKarlsson(P,s_ind,b_ind,lat,lon,cutoff_ratio,win=20,uice=168.,eps=3.2):
-    # empty continuity index array     
+    """
+    Karlsson Continuity Method
+
+    Based on Karlsson et al. (2012)
+    This method gives a value for the continuity of radar layers
+
+    Parameters
+    ----------
+    P:              uncorrected power
+    s_ind:          surface pick index
+    b_ind:          bed pick index
+    cutoff_ratio:   assigns the number of samples that are removed from top and bottom of the trace
+
+    Output
+    ---------
+    cont:
+    cont_filt:
+
+    """
+
+
+    # empty continuity index array
     cont = np.empty_like(b_ind).astype(float)
     cont[:] = np.nan
     # calculate the continuity index for each trace
@@ -194,16 +215,18 @@ def continuityKarlsson(P,s_ind,b_ind,lat,lon,cutoff_ratio,win=20,uice=168.,eps=3
 
     return cont,cont_filt
 
-###############################################################################    
-
-### Slope Gradient ###
-    
-# The layer tilt will affect the returned power (e.g. Holschuh et al. 2014)
-# This function calculates the gradient of slopes
-# where the slope is (dz/dx)
-# and the gradient of slopes is d(dz/dx)/dz
+###############################################################################
 
 def layerSlopeGradient(x,z,win):
+    """
+    ### Slope Gradient ###
+
+    # The layer tilt will affect the returned power (e.g. Holschuh et al. 2014)
+    # This function calculates the gradient of slopes
+    # where the slope is (dz/dx)
+    # and the gradient of slopes is d(dz/dx)/dz
+    """
+
     # Calculate the Slope (dz/dx) of each line
     slope = np.gradient(z,x,axis=1)
     # create empty arrays for filling
