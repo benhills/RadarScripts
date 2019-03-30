@@ -13,7 +13,7 @@ import sys
 ###############################################################################
 
 
-def loadStoMigData(fname,uice=168.,CReSIS=False):
+def loadStoMigData(fname,uice=168.,CReSIS=False,datatype='mig'):
     """
     ### Load STO radar data ###
     """
@@ -21,7 +21,16 @@ def loadStoMigData(fname,uice=168.,CReSIS=False):
     mfile = loadmat(fname)
 
     # data file variables
-    migdata = mfile['migdata']              # the actual radar data
+    try:
+        data = mfile['migdata']              # the actual radar data
+    except:
+        print('No migrated data, using input data type...')
+        data = mfile[datatype+'data']
+    
+    # grab the migrated data from the first slot
+    if np.shape(data)[1] == 2:
+        data = data[0]['data'][0]
+
     surface = mfile['elev'][:,0]               # elevation of the surface
     time = mfile['travel_time'][0]          # travel times for any one trace
     # Coordinates
@@ -42,7 +51,7 @@ def loadStoMigData(fname,uice=168.,CReSIS=False):
     a = np.sin((dlat-dlat[0])/2.)**2.+np.cos(dlat[0])*np.cos(dlat)*np.sin((dlon-dlon[0])/2.)**2.
     dist = 2.*R*np.arcsin(np.sqrt(a))
 
-    return migdata,surface,time,dist,vdist
+    return data,surface,time,dist,vdist
 
 
 
@@ -81,7 +90,7 @@ def loadStoPickData(fname,uice=168.,CReSIS=False):
     a = np.sin((dlat-dlat[0])/2.)**2.+np.cos(dlat[0])*np.cos(dlat)*np.sin((dlon-dlon[0])/2.)**2.
     dist = 2.*R*np.arcsin(np.sqrt(a))
 
-    return ppower,psamp1,pdist,lat,lon,x_coord,y_coord,dist,pnum
+    return ppower,psamp0.astype(int),psamp1.astype(int),psamp2.astype(int),pdist,lat,lon,x_coord,y_coord,dist,pnum
 
 ###############################################################################
 
@@ -250,3 +259,56 @@ def layerSlopeGradient(x,z,win):
             Dslope = np.append(Dslope,abs(p[0][0])*1000.)   # *1000. for m-1 to km-1
             Derr = np.append(Derr,np.sqrt(p[1][0,0])*1000.)   # *1000. for m-1 to km-1
     return Dslope,Derr
+
+
+# ----------------------------------------------------------------------------
+    
+def snowPermittivity(rho,m=0.,fs=500e6,fw=9.07e9):
+    """
+    Calculate the dielectric permittivity of snow
+    Kendra et al. (1998), IEEE
+    
+    Parameters
+    ---------
+    rho:        snow density       (g/cm3)
+    m:          snow wetness        (%)
+    fs:         radar frequency     (Hz)
+    fw:         relaxation frequency of water at 0C
+    
+    Output
+    ---------
+    eps_ds:     snow permittivity
+    """
+    
+    # permittivity of dry snow, Kendra eq. 13
+    eps_ds = 1. + 1.7*rho + 0.7*rho**2.
+    # added permittivity from wetness, Kendra eq. 14
+    Deps_s = 0.02*m**1.015+(.073*m**1.31)/(1+(fs/fw))
+    
+    eps_ds+=Deps_s
+    
+    return eps_ds
+
+
+def firnPermittivity(rhof,rhoi=917.,epsi_real=3.12,epsi_imag=-9.5):
+    """
+    Calculate the dielectric permittivity of firn with the DECOMP mixing model
+    Wilhelms (2005), GRL
+    
+    Parameters
+    ---------
+    rhof:           firn density       (kg/m3)
+    rhoi:           firn density       (kg/m3)
+    epsi_real:      real permittivity of ice (relative)
+    epsi_imag:      imaginary permittivity of ice (relative)
+
+    Output
+    ---------
+    eps_f:          firn permittivity   (relative)
+    """
+    
+    # Wilhelms (2005), end of section 2
+    lhs = 1. + (rhof/rhoi)*((epsi_real-1j*epsi_imag)**(1/3.)-1)
+    eps_f = lhs**3.
+
+    return eps_f
