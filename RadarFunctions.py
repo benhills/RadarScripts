@@ -10,8 +10,7 @@ import numpy as np
 from scipy.io import loadmat
 import sys
 
-###############################################################################
-
+# ----------------------------------------------------------------------------
 
 def loadStoMigData(fname,uice=168.,CReSIS=False,datatype='mig'):
     """
@@ -92,7 +91,7 @@ def loadStoPickData(fname,uice=168.,CReSIS=False):
 
     return ppower,psamp0.astype(int),psamp1.astype(int),psamp2.astype(int),pdist,lat,lon,x_coord,y_coord,dist,pnum
 
-###############################################################################
+# ----------------------------------------------------------------------------
 
 def Fresnel(n1,n2,theta_i):
     """
@@ -119,7 +118,7 @@ def Fresnel(n1,n2,theta_i):
     theta_tir = np.arcsin(n2/n1)
     return theta_r,theta_t,theta_b,theta_tir,Rp,Tp,Rs,Ts
 
-###############################################################################
+# ----------------------------------------------------------------------------
 
 def attTemp(T,Hplus=1.3,Clminus=4.2):
     """
@@ -172,11 +171,11 @@ def pureTempAtt(att):
     a *= 1e-3           # +3 for m-1 to km-1 and -6 for microSiemen
     sig = att/a
     # calculate the temperature
-    T = 1/(1/Tr-(k/E0)*np.log(sig/sig0))
+    T = 1./(1./Tr-(k/E0)*np.log(sig/sig0))
     T -= 273.15
     return T
 
-###############################################################################
+# ----------------------------------------------------------------------------
 
 def continuityKarlsson(P,s_ind,b_ind,lat,lon,cutoff_ratio,win=20,uice=168.,eps=3.2):
     """
@@ -224,7 +223,7 @@ def continuityKarlsson(P,s_ind,b_ind,lat,lon,cutoff_ratio,win=20,uice=168.,eps=3
 
     return cont,cont_filt
 
-###############################################################################
+# ----------------------------------------------------------------------------
 
 def layerSlopeGradient(x,z,win):
     """
@@ -312,3 +311,60 @@ def firnPermittivity(rhof,rhoi=917.,epsi_real=3.12,epsi_imag=-9.5):
     eps_f = lhs**3.
 
     return eps_f
+
+# ----------------------------------------------------------------------------
+
+def refractiveFocusing(z1,z2,eps1,eps2):
+    """ 
+    Refractive focusing at an interface
+    Dowedswell and Evans eq. TODO: look this up
+    
+    Parameters
+    ---------
+    z1:     scalar      Thickness above interface (m)
+    z2:     scalar      Thickness below interface (m)
+    eps1:   scalar      Permittivity above interface (relative)
+    eps2:   scalar      Permittivity below interface (relative)
+    
+    Output
+    ---------
+    q:      scalar              refractive focusing coefficient
+    """
+    q = ((z1+z2)/(z1+z2*np.sqrt(eps1/eps2)))**2.
+    q[z2 <= z1] = 1.
+    return q
+
+def Spreading(z,eps=3.12,h=0.,refraction=False):
+    """
+    Geometrical spreading correction for radar power.
+    Optionally includes refractive focusing 
+    Dowedswell and Evans eq. TODO: look this up
+    
+    Parameters
+    ---------
+    z:      array or scalar     depth (m)
+    eps:    array or scalar     permittivity (relative)
+    h:      scalar              height of aircraft
+    
+    Output
+    ---------
+    loss:   array or scalar     spreading loss (dB)
+    """
+    spherical = (2.*z)**2.
+    # refractive spreading correction
+    if hasattr(eps,"__len__"):
+        q = np.ones_like(z).astype(float)
+        for i in range(1,len(eps)):
+            qadd = refractiveFocusing(z[i],z-z[i],eps[i-1],eps[i])
+            q*=qadd    
+    else:
+        q = refractiveFocusing(h,z,1.,eps)
+    
+    if refraction:
+        # include refractive losses
+        loss = 10.*np.log10(spherical/q)
+    else:
+        # purely spherical spreading
+        loss = 10.*np.log10(spherical)
+    
+    return loss

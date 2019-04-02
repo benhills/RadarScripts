@@ -7,10 +7,11 @@ Created on Fri Jul 27 17:15:22 2018
 """
 
 import numpy as np
+from RadarFunctions import Spreading
 
 ###############################################################################
 
-def attenuationMatsuoka(P,z,win,eps=3.2):
+def attenuationMatsuoka(P,z,win,eps=3.2,h=0.,refraction=False,spreading=True):
     """
     Matsuoka Method
 
@@ -28,11 +29,15 @@ def attenuationMatsuoka(P,z,win,eps=3.2):
     N_out:      a 1-d array for attenuation rate in dB/km
 
     """
-    # correct for spherical spreading
-    Pc = P + 20.*np.log10(2.*z/np.sqrt(eps))               # Matsuoka et al. (2010) eq. 2 (changed by a factor of 2, maybe a typo?)
+    # correct for spreading
+    if spreading:
+        Pc = P + Spreading(z,eps=eps,h=h,refraction=refraction)
+    else:
+        Pc = P
     # create an empty array
     N_out = np.array([])
     Nerr_out = np.array([])
+    b_out = np.array([])
     # calculate the attenuation rate for each desired trace (or window)
     for tr in range(len(z[0])+1-win):
         # grab the data within the window
@@ -51,14 +56,16 @@ def attenuationMatsuoka(P,z,win,eps=3.2):
                 p = np.polyfit(x,y,1,cov=True)
                 N_out = np.append(N_out,-p[0][0]*1000./2.)   # *1000. for m-1 to km-1 and /2. for one-way attenuation
                 Nerr_out = np.append(Nerr_out,np.sqrt(p[1][0,0])*1000./2.)
+                b_out = np.append(b_out,p[0][1])
             except:
                 N_out = np.append(N_out,np.nan)
                 Nerr_out = np.append(Nerr_out,np.nan)
-    return N_out,Nerr_out
+                b_out = np.append(b_out,np.nan)
+    return N_out,Nerr_out,b_out
 
 ###############################################################################
 
-def attenuationJacobel(P,H):
+def attenuationJacobel(P,H,eps=3.12,h=0.,refraction=False,spreading=True):
     """
     ### Jacobel Method ###
 
@@ -75,7 +82,11 @@ def attenuationJacobel(P,H):
     # correct for geometric spreading (see description above)
     # TODO: Should there be a factor of two in the depth ratio?
     # Bob's language on this is confusing.
-    Pc = P + 20*np.log10(2.*H/np.nanmin(H))
+    # correct for spreading
+    if spreading:
+        Pc = P + Spreading(H,eps=eps,h=h,refraction=refraction)
+    else:
+        Pc = P
     # remove nan values
     idx = ~np.isnan(Pc) & ~np.isnan(H)
     y = Pc[idx]
@@ -110,7 +121,8 @@ def attenuationChristianson(power,power_mult,H,Risw,Rfa):
 
 ###############################################################################
 
-def attenuationSchroeder(P,H,N_max,N_step=1,Nh_target=1.,Cw=0.1,win_init=5,win_step=10,eps=3.2):
+def attenuationSchroeder(P,H,N_max,N_step=1,Nh_target=1.,Cw=0.1,win_init=5,win_step=10,
+                         eps=3.2,h=0.,refraction=False,spreading=True):
     """
     Schroeder Method
 
@@ -133,10 +145,12 @@ def attenuationSchroeder(P,H,N_max,N_step=1,Nh_target=1.,Cw=0.1,win_init=5,win_s
     win_out:    1-d array, resulting window size for optimized attenuation rate
     """
     # correct for spherical spreading, Schroeder et al. (2016) eq. 1
-    Pg = P + 20.*np.log10(2.*H/np.sqrt(eps))
-    # Create empty arrays to fill for the output attenuation rate and window size
-    N_out = np.zeros_like(Pg).astype(float)
-    win_out = np.zeros_like(Pg)
+    if spreading:
+        Pc = P + Spreading(H,eps=eps,h=h,refraction=refraction)
+    else:
+        Pc = P    # Create empty arrays to fill for the output attenuation rate and window size
+    N_out = np.zeros_like(Pc).astype(float)
+    win_out = np.zeros_like(Pc)
     # Possible values for the attenuation rate
     N = np.arange(0,N_max,N_step)
     # Loop through all the traces
@@ -150,11 +164,11 @@ def attenuationSchroeder(P,H,N_max,N_step=1,Nh_target=1.,Cw=0.1,win_init=5,win_s
         while Nh > Nh_target and win/2<=n and win/2<=(len(H)-n):
             # thickness and power in the window
             h = H[n-win/2:n+win/2]/1000.    # divide by 1000 for m-1 to km-1
-            pg = Pg[n-win/2:n+win/2]
+            pc = Pc[n-win/2:n+win/2]
             # loop through all the possible attenuation rates
             for j in range(len(N)):
                 # attenuation-corrected power, Schroeder et al. (2016) eq. 4
-                pa = pg + 2.*h*N[j]
+                pa = pc + 2.*h*N[j]
                 # calculate the correlation coefficient, Schroeder et al. (2016) eq. 5
                 sum1 = sum((h-np.mean(h))*(pa-np.mean(pa)))
                 sum2 = np.sqrt(sum((h-np.mean(h))**2.))
