@@ -9,7 +9,7 @@ Created on Fri Jul 27 17:15:22 2018
 import numpy as np
 from RadarFunctions import Spreading
 
-###############################################################################
+# -----------------------------------------------------------------------------------------------------
 
 def attenuationMatsuoka(P,z,win,eps=3.2,h=0.,refraction=False,spreading=True):
     """
@@ -20,7 +20,7 @@ def attenuationMatsuoka(P,z,win,eps=3.2,h=0.,refraction=False,spreading=True):
 
     Parameters
     ---------
-    P:          uncorrected power, 2-d array
+    P:          uncorrected power (dB), 2-d array
     z:          distance between the surface and the picked layer, 2-d array
     win:        window size (i.e. using a bigger window will include more traces in the least-squares fit)
 
@@ -63,7 +63,7 @@ def attenuationMatsuoka(P,z,win,eps=3.2,h=0.,refraction=False,spreading=True):
                 b_out = np.append(b_out,np.nan)
     return N_out,Nerr_out,b_out
 
-###############################################################################
+# -----------------------------------------------------------------------------------------------------
 
 def attenuationJacobel(P,H,eps=3.12,h=0.,refraction=False,spreading=True):
     """
@@ -97,7 +97,7 @@ def attenuationJacobel(P,H,eps=3.12,h=0.,refraction=False,spreading=True):
     Nerr = np.sqrt(p[1][0,0])*1000./2.
     return N,Nerr
 
-###############################################################################
+# -----------------------------------------------------------------------------------------------------
 
 def attenuationChristianson(power,power_mult,H,Risw,Rfa):
     """
@@ -119,10 +119,10 @@ def attenuationChristianson(power,power_mult,H,Risw,Rfa):
     Na = 1000.*10.*np.log10(np.exp(1))/La
     return np.nanmean(Na),np.nanstd(Na),Na
 
-###############################################################################
+# -----------------------------------------------------------------------------------------------------
 
-def attenuationSchroeder(P,H,N_max,N_step=1,Nh_target=1.,Cw=0.1,win_init=5,win_step=10,
-                         eps=3.2,h=0.,refraction=False,spreading=True):
+def attenuationSchroeder(P,H,Nmax,dN=1,Nh_target=1.,Cw=0.1,win_init=5,win_step=10,
+                         eps=3.2,h_spread=0.,refraction=False,spreading=True):
     """
     Schroeder Method
 
@@ -135,27 +135,42 @@ def attenuationSchroeder(P,H,N_max,N_step=1,Nh_target=1.,Cw=0.1,win_init=5,win_s
 
     Parameters
     ----------
-    Pc:     corrected power
+    P:      uncorrected power
     H:      thickness
-    win:    window size as an integer
+    Nmax:   maximum attenuation
+    dN:     step size for attenuation guesses
+    Nh_target:
+    Cw:
+    win_init:
+    win_step:
+    eps:
+    h_spread:
+    refraction:
+    spreading:
 
     Output
     ---------
-    N_out:  1-d array for attenuation rate in dB/km
+    N_out:      1-d array for attenuation rate in dB/km
     win_out:    1-d array, resulting window size for optimized attenuation rate
     """
-    # correct for spherical spreading, Schroeder et al. (2016) eq. 1
+
+    # Load the power of picked reflectors
     if spreading:
-        Pc = P + Spreading(H,eps=eps,h=h,refraction=refraction)
+        # correct for spherical spreading, Schroeder et al. (2016) eq. 1
+        Pc = P + Spreading(H,eps=eps,h=h_spread,refraction=refraction)
     else:
-        Pc = P    # Create empty arrays to fill for the output attenuation rate and window size
+        Pc = P
+
+    # Create empty arrays to fill for the output attenuation rate and window size
     N_out = np.zeros_like(Pc).astype(float)
     win_out = np.zeros_like(Pc)
+
     # Possible values for the attenuation rate
-    N = np.arange(0,N_max,N_step)
+    N = np.arange(0,Nmax,dN)
+
     # Loop through all the traces
     for n in range(len(P)):
-        # Correlation Coefficient
+        # zero out the correlation coefficient array
         C = np.zeros_like(N)
         # Initial window size
         win = win_init
@@ -185,3 +200,100 @@ def attenuationSchroeder(P,H,N_max,N_step=1,Nh_target=1.,Cw=0.1,win_init=5,win_s
         N_out[n] = Nm
         win_out[n] = win
     return N_out,win_out
+
+# -----------------------------------------------------------------------------------------------------
+
+
+def attenuationSchroederVertical(H,P,att_ds,N_max=20,dN=.1,Nh_target=3.,win_init=100,win_step=20,
+                        Cw=0.1,eps=3.2,h_spread=0.,refraction=False,spreading=True):
+    """
+    Schroeder Method
+
+    TODO: Error and test
+
+    Based on Schroeder et al. (2016)
+    This method minimizes the correlation coeffiecient between attenuation
+    rate and ice thickness
+    Assumes that the reflectivity of the bed is constant
+
+    Parameters
+    ----------
+    H:      thickness (or depth of internal layer)
+    P:      uncorrected power
+    att_ds: depths at which to center attenuation calculations
+    Nmax:   maximum attenuation
+    dN:     step size for attenuation guesses
+    Nh_target:
+    win_init:
+    win_step:
+    Cw:
+    eps:
+    h_spread:
+    refraction:
+    spreading:
+
+    Output
+    ---------
+    N_out:      1-d array for attenuation rate in dB/km
+    Nh_out:      1-d array for attenuation rate error in dB/km
+    win_out:    1-d array, resulting window size for optimized attenuation rate
+    """
+
+
+    # Load the power of picked reflectors
+    if spreading:
+        # correct for spherical spreading, Schroeder et al. (2016) eq. 1
+        Pc = P + Spreading(H,eps=eps,h=h_spread,refraction=refraction)
+    else:
+        Pc = P
+
+    # Create empty arrays to fill for the output attenuation rate and window size
+    N_out = np.zeros_like(att_ds).astype(float)
+    Nh_out = np.zeros_like(att_ds).astype(float)
+    win_out = np.zeros_like(att_ds)
+
+    # possible attenuation rates
+    N = np.arange(0,N_max+dN,dN).astype(float)
+
+    # Loop through all the desired depths
+    for i in range(len(att_ds)):
+        # current depth for attenuation calc
+        att_d = att_ds[i]
+        # Correlation Coefficient (starts empty)
+        C = np.empty_like(N)
+        # Initial window size
+        win = win_init
+        # Radiometric Resolution (needs to converge to Nh_target)
+        Nh = Nh_target + 1.
+        while Nh > Nh_target and att_d-win>=np.min(H) and att_d+win<=np.max(H):
+            # thickness and power in the window
+            idx = np.argwhere(abs(H-att_d)<win)
+            hi = H[idx]/1000.    # divide by 1000 for m-1 to km-1
+            pi = Pc[idx]
+            # loop through all the possible attenuation rates
+            for n in range(len(N)):
+                # attenuation-corrected power, Schroeder et al. (2016) eq. 4
+                pa = pi + 2.*hi*N[n]
+                # calculate the correlation coefficient, Schroeder et al. (2016) eq. 5
+                sum1 = np.nansum((hi-np.nanmean(hi))*(pa-np.nanmean(pa)))
+                sum2 = np.sqrt(np.nansum((hi-np.nanmean(hi))**2.))
+                sum3 = np.sqrt(np.nansum((pa-np.nanmean(pa))**2.))
+                if np.any(np.isnan([sum1,sum2,sum3])):
+                    C[n] = np.nan
+                else:
+                    C[n] = abs(sum1/(sum2*sum3))
+            # Whichever value has the lowest correlation coefficient is chosen
+            Cm = np.min(C)
+            Nm = N[C==Cm]
+            C0 = C[N==0]
+            if Cm < Cw and C0 > Cw:
+                Nh = np.max(N[C<Cw])-np.min(N[C<Cw])
+            else:
+                Nh = np.nan
+            # get ready for the next iteration
+            win += win_step
+        # output
+        N_out[i] = Nm
+        Nh_out[i] = Nh
+        win_out[i] = win
+    return N_out, Nh_out, win_out

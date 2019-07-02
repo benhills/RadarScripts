@@ -23,22 +23,25 @@ def loadStoMigData(fname,uice=168.,CReSIS=False,datatype='mig'):
     try:
         data = mfile['migdata']              # the actual radar data
     except:
-        print('No migrated data, using input data type...')
+        print('No migrated data, using input data type:',datatype)
         data = mfile[datatype+'data']
     
     # grab the migrated data from the first slot
     if np.shape(data)[1] == 2:
         data = data[0]['data'][0]
 
-    surface = mfile['elev'][:,0]               # elevation of the surface
-    time = mfile['travel_time'][0]          # travel times for any one trace
-    # Coordinates
-    lat = mfile['lat'][:,0]
-    lon = mfile['long'][:,0]
-    if CReSIS==True:
+    if len(mfile['travel_time'])>1:
+        surface = mfile['elev'][0]               # elevation of the surface
         time = mfile['travel_time'][:,0]          # travel times for any one trace
+        # Coordinates
         lat = mfile['lat'][0]
-        lon = mfile['long'][0]
+        lon = mfile['long'][0]        
+    else:
+        surface = mfile['elev'][:,0]               # elevation of the surface
+        time = mfile['travel_time'][0]          # travel times for any one trace
+        # Coordinates
+        lat = mfile['lat'][:,0]
+        lon = mfile['long'][:,0]
 
     ### Calculations ###
     # Conversions
