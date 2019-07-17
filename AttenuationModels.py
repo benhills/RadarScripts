@@ -11,7 +11,7 @@ from RadarFunctions import Spreading
 
 # -----------------------------------------------------------------------------------------------------
 
-def attenuationMatsuoka(P,z,win,eps=3.2,h=0.,refraction=False,spreading=True):
+def attenuationMatsuoka(P,z,win,eps=3.2,h_aircraft=0.,refraction=False,spreading=True):
     """
     Matsuoka Method
 
@@ -27,11 +27,13 @@ def attenuationMatsuoka(P,z,win,eps=3.2,h=0.,refraction=False,spreading=True):
     Output
     ---------
     N_out:      a 1-d array for attenuation rate in dB/km
+    N_err:      a 1-d array for error in attenuation rate in dB/km
+    b_out:      a 1-d array for intercept (should be constrained by the transmit power but that does not really work)
 
     """
     # correct for spreading
     if spreading:
-        Pc = P + Spreading(z,eps=eps,h=h,refraction=refraction)
+        Pc = P + Spreading(z,eps=eps,h=h_aircraft,refraction=refraction)
     else:
         Pc = P
     # create an empty array
@@ -65,7 +67,7 @@ def attenuationMatsuoka(P,z,win,eps=3.2,h=0.,refraction=False,spreading=True):
 
 # -----------------------------------------------------------------------------------------------------
 
-def attenuationJacobel(P,H,eps=3.12,h=0.,refraction=False,spreading=True):
+def attenuationJacobel(P,H,eps=3.12,h_aircraft=0.,refraction=False,spreading=True):
     """
     ### Jacobel Method ###
 
@@ -84,7 +86,7 @@ def attenuationJacobel(P,H,eps=3.12,h=0.,refraction=False,spreading=True):
     # Bob's language on this is confusing.
     # correct for spreading
     if spreading:
-        Pc = P + Spreading(H,eps=eps,h=h,refraction=refraction)
+        Pc = P + Spreading(H,eps=eps,h=h_aircraft,refraction=refraction)
     else:
         Pc = P
     # remove nan values
@@ -122,7 +124,7 @@ def attenuationChristianson(power,power_mult,H,Risw,Rfa):
 # -----------------------------------------------------------------------------------------------------
 
 def attenuationSchroeder(P,H,Nmax,dN=1,Nh_target=1.,Cw=0.1,win_init=5,win_step=10,
-                         eps=3.2,h_spread=0.,refraction=False,spreading=True):
+                         eps=3.2,h_aircraft=0.,refraction=False,spreading=True):
     """
     Schroeder Method
 
@@ -157,7 +159,7 @@ def attenuationSchroeder(P,H,Nmax,dN=1,Nh_target=1.,Cw=0.1,win_init=5,win_step=1
     # Load the power of picked reflectors
     if spreading:
         # correct for spherical spreading, Schroeder et al. (2016) eq. 1
-        Pc = P + Spreading(H,eps=eps,h=h_spread,refraction=refraction)
+        Pc = P + Spreading(H,eps=eps,h=h_aircraft,refraction=refraction)
     else:
         Pc = P
 
@@ -205,7 +207,7 @@ def attenuationSchroeder(P,H,Nmax,dN=1,Nh_target=1.,Cw=0.1,win_init=5,win_step=1
 
 
 def attenuationSchroederVertical(H,P,att_ds,N_max=20,dN=.1,Nh_target=3.,win_init=100,win_step=20,
-                        Cw=0.1,eps=3.2,h_spread=0.,refraction=False,spreading=True):
+                        Cw=0.1,eps=3.2,h_aircraft=0.,refraction=False,spreading=True):
     """
     Schroeder Method
 
@@ -243,7 +245,7 @@ def attenuationSchroederVertical(H,P,att_ds,N_max=20,dN=.1,Nh_target=3.,win_init
     # Load the power of picked reflectors
     if spreading:
         # correct for spherical spreading, Schroeder et al. (2016) eq. 1
-        Pc = P + Spreading(H,eps=eps,h=h_spread,refraction=refraction)
+        Pc = P + Spreading(H,eps=eps,h=h_aircraft,refraction=refraction)
     else:
         Pc = P
 
@@ -264,8 +266,9 @@ def attenuationSchroederVertical(H,P,att_ds,N_max=20,dN=.1,Nh_target=3.,win_init
         # Initial window size
         win = win_init
         # Radiometric Resolution (needs to converge to Nh_target)
-        Nh = Nh_target + 1.
-        while Nh > Nh_target and att_d-win>=np.min(H) and att_d+win<=np.max(H):
+        Nh = Nh_target + 10.
+        Nm = 0.
+        while Nh > Nh_target and att_d-win>=np.nanmin(H) and att_d+win<=np.nanmax(H):
             # thickness and power in the window
             idx = np.argwhere(abs(H-att_d)<win)
             hi = H[idx]/1000.    # divide by 1000 for m-1 to km-1
@@ -283,13 +286,11 @@ def attenuationSchroederVertical(H,P,att_ds,N_max=20,dN=.1,Nh_target=3.,win_init
                 else:
                     C[n] = abs(sum1/(sum2*sum3))
             # Whichever value has the lowest correlation coefficient is chosen
-            Cm = np.min(C)
+            Cm = np.nanmin(C)
             Nm = N[C==Cm]
             C0 = C[N==0]
             if Cm < Cw and C0 > Cw:
-                Nh = np.max(N[C<Cw])-np.min(N[C<Cw])
-            else:
-                Nh = np.nan
+                Nh = (np.max(N[C<Cw])-np.min(N[C<Cw]))/2.
             # get ready for the next iteration
             win += win_step
         # output
