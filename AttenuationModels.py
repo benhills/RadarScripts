@@ -7,7 +7,7 @@ Created on Fri Jul 27 17:15:22 2018
 """
 
 import numpy as np
-from RadarFunctions import Spreading
+from PowerCorrections import Spreading
 
 # -----------------------------------------------------------------------------------------------------
 
