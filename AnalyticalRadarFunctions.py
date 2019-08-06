@@ -56,7 +56,7 @@ def attTemp(T,Hplus=1.3,Clminus=4.2):
     EH = 0.2*1.6e-19     # J
     ECl = 0.19*1.6e-19  # J
     # Pure ice conductivity
-    sig0 = 7.2          # S m-1
+    sig0 = 6.6          # S m-1
     # Ion concentrations
     muH = 3.2           # S m-1 M-1
     muCl = 0.43          # S m-1 M-1

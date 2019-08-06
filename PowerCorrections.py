@@ -14,7 +14,7 @@ from scipy.interpolate import interp1d
 def refractiveFocusing(z1,z2,eps1,eps2):
     """
     Refractive focusing at an interface
-    Dowedswell and Evans eq. TODO: look this up
+    Dowedswell and Evans eq. 5
 
     Parameters
     ---------
@@ -58,7 +58,7 @@ def Spreading(z,eps=3.12,d_eps=0.,h=0.,refraction=False):
         if eps=='SPL':
             n = 1.324+5.2854*(d_eps/1000.)-21.865*(d_eps/1000.)**2.+39.058*(d_eps/1000.)**3.
             eps = n**2.
-            eps[d_eps>157.5] = 3.12
+            eps[eps>3.15]=3.15
 
         # refractive focusing correction
         if hasattr(eps,"__len__"):
