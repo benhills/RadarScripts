@@ -8,10 +8,11 @@ Created on Fri Jul 27 17:15:22 2018
 
 import numpy as np
 from PowerCorrections import Spreading
+from scipy import stats
 
 # -----------------------------------------------------------------------------------------------------
 
-def attenuationMatsuoka(P,z,win,eps=3.2,h_aircraft=0.,refraction=False,spreading=True):
+def attenuationMatsuoka(P,z,win,sigP=0,sig_z=0,Cint=.95,spreading=True,regression='numpy',**kwargs):
     """
     Matsuoka Method
 
@@ -35,39 +36,56 @@ def attenuationMatsuoka(P,z,win,eps=3.2,h_aircraft=0.,refraction=False,spreading
     if spreading:
         Pc = P + Spreading(z,eps=eps,h=h_aircraft,refraction=refraction)
     else:
-        Pc = P
+        Pc = P.copy()
     # create an empty array
     N_out = np.array([])
     Nerr_out = np.array([])
-    b_out = np.array([])
+    a_out = np.array([])
     # calculate the attenuation rate for each desired trace (or window)
     for tr in range(len(z[0])+1-win):
         # grab the data within the window
-        y = Pc[:,tr:tr+win]
-        x = z[:,tr:tr+win]
+        Pc_regression = np.squeeze(Pc[:,tr:tr+win].copy())
+        z_regression = np.squeeze(z[:,tr:tr+win].copy())
         # remove nan values
-        idx = ~np.isnan(y) & ~np.isnan(x)
-        y = y[idx]
-        x = x[idx]
-        if len(y)<5:
+        idx = ~np.isnan(Pc_regression) & ~np.isnan(z_regression)
+        Pc_regression = Pc_regression[idx]
+        z_regression = z_regression[idx]/1000.
+        if len(Pc_regression)<5:
             N_out = np.append(N_out,np.nan)
             Nerr_out = np.append(Nerr_out,np.nan)
-        else:
+        elif regression=='numpy':
             try:
                 # linear fit with depth
-                p = np.polyfit(x,y,1,cov=True)
-                N_out = np.append(N_out,-p[0][0]*1000./2.)   # *1000. for m-1 to km-1 and /2. for one-way attenuation
-                Nerr_out = np.append(Nerr_out,np.sqrt(p[1][0,0])*1000./2.)
-                b_out = np.append(b_out,p[0][1])
+                p = np.polyfit(z_regression,Pc_regression,1,cov=True)
+                N_out = np.append(N_out,-p[0][0]*1./2.)   # *1000. for m-1 to km-1 and /2. for one-way attenuation
+                Nerr_out = np.append(Nerr_out,np.sqrt(p[1][0,0])*1./2.)
+                a_out = np.append(a_out,p[0][1])
             except:
                 N_out = np.append(N_out,np.nan)
                 Nerr_out = np.append(Nerr_out,np.nan)
-                b_out = np.append(b_out,np.nan)
-    return N_out,Nerr_out,b_out
+                a_out = np.append(a_out,np.nan)
+        elif regression=='Deming':
+            # Deming regression after Casella and Berger (2002) section 12.3
+            lam = (sig_z**2.)/(sigP**2.)
+            Sxx = np.sum((z_regression-np.mean(z_regression))**2.)
+            Syy = np.sum((Pc_regression-np.mean(Pc_regression))**2.)
+            Sxy = np.sum((z_regression-np.mean(z_regression))*(Pc_regression-np.mean(Pc_regression)))
+            # Regression slope, eq. 12.3.16
+            N = (-Sxx+lam*Syy+np.sqrt((Sxx-lam*Syy)**2.+4.*lam*Sxy**2.))/(2.*lam*Sxy)
+            a = np.mean(Pc_regression)-N*np.mean(z_regression)
+            # Standard deviation in slope 12.3.22
+            sig_N = np.sqrt(((1.+lam*N**2.)**2.*(Sxx*Syy-Sxy**2.))/((Sxx-lam*Syy)+4.*lam*Sxy**2.))
+            tscore = stats.t.ppf(1.-(1.-Cint)/2., len(z))
+            Nerr = tscore*sig_N/(np.sqrt(len(z)-2))
+            N_out = np.append(N_out,N*(-.5)) #one-way attenuation rate
+            Nerr_out = np.append(Nerr_out,Nerr*.5)
+            a_out = np.append(a_out,a)
+
+    return N_out,Nerr_out,a_out
 
 # -----------------------------------------------------------------------------------------------------
 
-def attenuationJacobel(P,H,eps=3.12,h_aircraft=0.,refraction=False,spreading=True):
+def attenuationJacobel(P,H,sigP=0.,sigH=0.,Cint=.95,spreading=True,regression='numpy', *args, **kwargs):
     """
     ### Jacobel Method ###
 
@@ -81,22 +99,36 @@ def attenuationJacobel(P,H,eps=3.12,h_aircraft=0.,refraction=False,spreading=Tru
         # effectively removing the inverse-square losses due to geometric spreading
 
     """
-    # correct for geometric spreading (see description above)
-    # TODO: Should there be a factor of two in the depth ratio?
-    # Bob's language on this is confusing.
     # correct for spreading
     if spreading:
-        Pc = P + Spreading(H,eps=eps,h=h_aircraft,refraction=refraction)
+        Pc = P + Spreading(H,eps='SPL',refraction=True)
     else:
         Pc = P
     # remove nan values
     idx = ~np.isnan(Pc) & ~np.isnan(H)
-    y = Pc[idx]
-    x = H[idx]
-    # fit a line for thickness and power
-    p = np.polyfit(x,y,1,cov=True)
-    N = -p[0][0]*1000./2.            # *1000./2. for m-1 to km-1 and for one-way attenuation
-    Nerr = np.sqrt(p[1][0,0])*1000./2.
+    Pc = Pc[idx]
+    H = H[idx]/1000.
+
+    if regression=='numpy':
+        # fit a line for thickness and power
+        p = np.polyfit(H,Pc,1,cov=True)
+        N = -p[0][0]/2.            # *1000./2. for m-1 to km-1 and for one-way attenuation
+        Nerr = np.sqrt(p[1][0,0])/2.
+    elif regression=='Deming':
+        # Deming regression after Casella and Berger (2002) section 12.3
+        lam = (sigH**2.)/(sigP**2.)
+        Sxx = np.sum((H-np.mean(H))**2.)
+        Syy = np.sum((Pc-np.mean(Pc))**2.)
+        Sxy = np.sum((H-np.mean(H))*(Pc-np.mean(Pc)))
+        # Regression slope, eq. 12.3.16
+        N = (-Sxx+lam*Syy+np.sqrt((Sxx-lam*Syy)**2.+4.*lam*Sxy**2.))/(2.*lam*Sxy)
+        # Standard deviation in slope 12.3.22
+        sig_N = np.sqrt(((1.+lam*N**2.)**2.*(Sxx*Syy-Sxy**2.))/((Sxx-lam*Syy)+4.*lam*Sxy**2.))
+        tscore = stats.t.ppf(1.-(1.-Cint)/2., len(H))
+        Nerr = tscore*sig_N/(np.sqrt(len(H)-2))
+        N *= -.5 #one-way attenuation rate
+        Nerr *= .5
+
     return N,Nerr
 
 # -----------------------------------------------------------------------------------------------------
