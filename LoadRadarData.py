@@ -75,6 +75,11 @@ def loadStoPickData(fname,uice=168.,CReSIS=False):
     x_coord = pfile['geocoords'][0][0][3].flatten()
     y_coord = pfile['geocoords'][0][0][4].flatten()
 
+    # Decimal Day
+    decday = pfile['other'][0][0][2].flatten()
+    # convert to python ordinal date
+    decday -= 366.
+
     ### Calculations ###
     # Conversions
     pdist = ptimes*uice/2.                  # distance to the top of the picked wavelet (m)
@@ -90,4 +95,4 @@ def loadStoPickData(fname,uice=168.,CReSIS=False):
     a = np.sin((dlat-dlat[0])/2.)**2.+np.cos(dlat[0])*np.cos(dlat)*np.sin((dlon-dlon[0])/2.)**2.
     dist = 2.*R*np.arcsin(np.sqrt(a))
 
-    return ppower,psamp0.astype(int),psamp1.astype(int),psamp2.astype(int),pdist, ptimes,lat,lon,x_coord,y_coord,dist,pnum
+    return ppower,psamp0.astype(int),psamp1.astype(int),psamp2.astype(int),pdist, ptimes,lat,lon,x_coord,y_coord,dist,decday,pnum
