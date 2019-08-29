@@ -90,4 +90,4 @@ def loadStoPickData(fname,uice=168.,CReSIS=False):
     a = np.sin((dlat-dlat[0])/2.)**2.+np.cos(dlat[0])*np.cos(dlat)*np.sin((dlon-dlon[0])/2.)**2.
     dist = 2.*R*np.arcsin(np.sqrt(a))
 
-    return ppower,psamp0.astype(int),psamp1.astype(int),psamp2.astype(int),pdist,lat,lon,x_coord,y_coord,dist,pnum
+    return ppower,psamp0.astype(int),psamp1.astype(int),psamp2.astype(int),pdist, ptimes,lat,lon,x_coord,y_coord,dist,pnum
