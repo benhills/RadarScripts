@@ -75,8 +75,8 @@ def attenuationMatsuoka(P,z,win,sigP=0,sig_z=0,Cint=.95,spreading=True,regressio
             a = np.mean(Pc_regression)-N*np.mean(z_regression)
             # Standard deviation in slope 12.3.22
             sig_N = np.sqrt(((1.+lam*N**2.)**2.*(Sxx*Syy-Sxy**2.))/((Sxx-lam*Syy)+4.*lam*Sxy**2.))
-            tscore = stats.t.ppf(1.-(1.-Cint)/2., len(z))
-            Nerr = tscore*sig_N/(np.sqrt(len(z)-2))
+            tscore = stats.t.ppf(1.-(1.-Cint)/2., len(z_regression))
+            Nerr = tscore*sig_N/(np.sqrt(len(z_regression)-2))
             N_out = np.append(N_out,N*(-.5)) #one-way attenuation rate
             Nerr_out = np.append(Nerr_out,Nerr*.5)
             a_out = np.append(a_out,a)
