@@ -11,9 +11,35 @@ from scipy.io import loadmat
 
 # ----------------------------------------------------------------------------
 
-def loadStoMigData(fname,uice=168.,CReSIS=False,datatype='mig'):
+def loadStoMigData(fname,uice=169.,CReSIS=False,datatype='mig'):
     """
-    ### Load STO radar data ###
+    Load STO Matlab radar data file
+
+    Parameters
+    ---------
+    fname:  string
+        filename to load
+    uice:   float
+        wave velocity in ice (Mm/s)
+    CReSIS: bool
+        option to load a CReSIS file which is in power space
+    datatype:   string
+        the STO files have different variables based on the processing stage
+        options between mig, interp, etc.
+
+    Output
+    ---------
+    data:   2-d array
+        The data image
+    surface:    1-d array
+        The surface elevation profile from GPS
+    time:   1-d array
+        Vertical array for travel time. in microseconds
+    dist:   1-d array
+        Horizontal array of distances along the profile
+    vdist:  1-d array
+        Vertical array of distances assuming a constant wave velocity
+
     """
 
     mfile = loadmat(fname)
@@ -55,9 +81,38 @@ def loadStoMigData(fname,uice=168.,CReSIS=False,datatype='mig'):
     return data,surface,time,dist,vdist
 
 
-def loadStoPickData(fname,uice=168.,CReSIS=False):
+def loadStoPickData(fname,uice=169.,CReSIS=False):
     """
-    ### Load STO pick data ###
+    Load STO Matlab files saved by the interpreter in StoInterpret
+
+    Parameters
+    ---------
+    fname:  string
+        filename to load
+    uice:   float
+        wave velocity in ice (Mm/s)
+    CReSIS: bool
+        option to load a CReSIS file which is in power space
+
+    Output
+    ---------
+    ppower
+    psamp0
+    psamp1
+    psamp2
+    pdist
+    ptimes
+    lat
+    lon
+    x_coord
+    y_coord
+    dist:   array
+        distance vector calculated from x/y
+    decday: array
+        decimal day of trace measurement
+    pnum:   array
+        pick number
+
     """
     pfile = loadmat(fname)
 
