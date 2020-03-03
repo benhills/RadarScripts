@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on Fri Jul 27 17:15:22 2018
@@ -74,8 +74,8 @@ def attenuationMatsuoka(P,z,win,sigP=0,sig_z=0,Cint=.95,spreading=True,regressio
             N = (-Sxx+lam*Syy+np.sqrt((Sxx-lam*Syy)**2.+4.*lam*Sxy**2.))/(2.*lam*Sxy)
             a = np.mean(Pc_regression)-N*np.mean(z_regression)
             # Standard deviation in slope 12.3.22
-            sig_N = np.sqrt(((1.+lam*N**2.)**2.*(Sxx*Syy-Sxy**2.))/((Sxx-lam*Syy)+4.*lam*Sxy**2.))
-            tscore = stats.t.ppf(1.-(1.-Cint)/2., len(z_regression))
+            sig_N = np.sqrt(((1.+lam*N**2.)**2.*(Sxx*Syy-Sxy**2.))/((Sxx-lam*Syy)**2.+4.*lam*Sxy**2.))
+            tscore = stats.t.ppf(1.-(1.-Cint)/2., len(z_regression)-2)
             Nerr = tscore*sig_N/(np.sqrt(len(z_regression)-2))
             N_out = np.append(N_out,N*(-.5)) #one-way attenuation rate
             Nerr_out = np.append(Nerr_out,Nerr*.5)
@@ -123,13 +123,13 @@ def attenuationJacobel(P,H,sigP=0.,sigH=0.,Cint=.95,spreading=True,regression='n
         # Regression slope, eq. 12.3.16
         N = (-Sxx+lam*Syy+np.sqrt((Sxx-lam*Syy)**2.+4.*lam*Sxy**2.))/(2.*lam*Sxy)
         # Standard deviation in slope 12.3.22
-        sig_N = np.sqrt(((1.+lam*N**2.)**2.*(Sxx*Syy-Sxy**2.))/((Sxx-lam*Syy)+4.*lam*Sxy**2.))
-        tscore = stats.t.ppf(1.-(1.-Cint)/2., len(H))
+        sig_N = np.sqrt(((1.+lam*N**2.)**2.*(Sxx*Syy-Sxy**2.))/((Sxx-lam*Syy)**2.+4.*lam*Sxy**2.))
+        tscore = stats.t.ppf(1.-(1.-Cint)/2., len(H)-2)
         Nerr = tscore*sig_N/(np.sqrt(len(H)-2))
         N *= -.5 #one-way attenuation rate
         Nerr *= .5
 
-    return N,Nerr
+    return N,Nerr,sig_N,tscore/(np.sqrt(len(H)-2))
 
 # -----------------------------------------------------------------------------------------------------
 

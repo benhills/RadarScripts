@@ -73,8 +73,11 @@ def Spreading(z,eps=3.12,d_eps=0.,h=0.,refraction=False):
 
         # include refractive losses
         loss = 10.*np.log10(spherical/qinterp(z))
+
+        return loss,qinterp
+
     else:
         # purely spherical spreading
         loss = 10.*np.log10(spherical)
 
-    return loss,qinterp
+        return loss
